@@ -1,6 +1,9 @@
 import numpy as np
+import matplotlib.pyplot as plt
+
 from Constants.BMConsts import Constants
 from Utils import FunctionGenerators
+from Utils import FunctionImitators
 from Utils import VerUtils as VU
 
 class BrainModel():
@@ -8,138 +11,238 @@ class BrainModel():
     def __init__(self, Number_Of_Sources = 2):
 
         # self.head_properties = Constants.head_properties['default']
-        self.source_properties = Constants.source_properties['default']
-        self.sensor_properties = Constants.sensor_properties['default']
+        self.SourceProperties = Constants.SourceProperties['default']
+        self.SensorProperties = Constants.SensorProperties['default']
 
-        self.source_properties['number_of_sources'] = Number_Of_Sources
-        self.source_properties['connections'] = np.arange(Number_Of_Sources)
+        self.SourceProperties['Basics']['NumOfSources'] = Number_Of_Sources
+        self.SourceProperties['Network']['Connections'] = np.eye(Number_Of_Sources)
+        self.SourceProperties['Network']['NodeProperties'] = Constants.SourceProperties['default']['Network']['NodeProperties'] * Number_Of_Sources
 
     def GenerateSourceSignal(self, **kwargs):
 
-        properties = self.source_properties ### What is this?
-        self.source_properties.update(kwargs)
-
-        self.source_signals = self.signal_generator()
-        # self.sensor_signals = self.sensor()
+        self.SourceSignals = self.signal_generator()
 
     def signal_generator(self):
 
-        n_eps = self.source_properties['episode']
-        n_src = self.source_properties['number_of_sources']
-        ep_len = self.source_properties['episode_length']
+        n_eps = self.SourceProperties['Basics']['NumOfEpisodes']
+        n_src = self.SourceProperties['Basics']['NumOfSources']
+        ep_len = self.SourceProperties['Basics']['EpisodeLength']
 
-        connections = self.source_properties['connections']
+        Connections = self.SourceProperties['Network']['Connections']
+        # Delays = self.SourceProperties['Network']['Delays']
 
-        gen_func = self.source_properties['generating_functions'] # I assume that a single generating function will be passed, handle a specified source type (?)
+        GenFuncs = self.SourceProperties['Network']['NodeProperties']
+        ImiFuncs = self.SourceProperties['Network']['EdgeProperties']
         
-        specs = self.source_properties['gen_func_specs']
+        specs = {}
         specs['Fs'] = Constants.Fs['default']
 
-        assert len(gen_func) <= n_src, "Invalid number of generating functions"
-        assert len(connections) <= n_src, "Invalid connected sources"
+        assert len(GenFuncs) == n_src, "Invalid number of generating functions"
+        assert len(Connections) <= n_src, "Invalid Connection Matrix"
 
-        # # # Connections must be a partitioning list of sources! # # # -> Handle it bro
+        Connections = np.array(Connections)
+        # Delays = np.array(Delays)
 
-        # # # V0 is about non-connected signals, if they were connected, a 'connection_type' must be set too.
+        assert Connections.ndim <= 2, "Invalid Dimensions of Connection Matrix"
+        assert Connections.shape[0] == Connections.shape[1], "Connections Matrix Must be a Square Matrix"
 
-        interactions = len(connections) < n_src
+        # assert Delays.shape == Connections.shape, "Invalid Delay Matrix"
 
-        assert ~interactions, "The connected signals is not available yet!"
+        assert np.all(np.sum(Connections, axis = 0) < 3) and np.all(np.sum(Connections, axis = 1) < 3), "Only Two Node Networks are Supported in this Version :)"
 
-        temp_W_Src = []
+        BrainSrc = np.zeros((n_src, n_eps, ep_len))
 
-        for src in range(n_src):
+        SrcDone = np.zeros((n_src, 1))
 
-            temp_S_Src = []
+        AssConn, SymConn = VU.AESIR(Connections)
 
-            for eps in range(n_eps):
+        for i in range(SymConn.shape[0]): # Excavate Springs!
 
-                temp_S_Src.append(self.indSignalGen(ep_len, gen_func[0], specs))
+            # print(SrcDone)
 
-            temp_W_Src.append(temp_S_Src)
+            if SrcDone[i] == 0:
+                
+                if np.all(AssConn[:, i] == 0):
 
-        return np.array(temp_W_Src)
+                    if np.sum(SymConn[i, :]) == 1:
+
+                        print("Alone Src " + str(i))
+
+                        for eps in range(n_eps):
+
+                            BrainSrc[i, eps, :] = self.SignalGen(ep_len, GenFuncs[i])
+                            SrcDone[i] = 1
+
+                    elif np.any([(SymConn[i, j] == 1 and j != i) for j in range(len(SymConn[i, :]))]):
+
+                        j = np.where([(SymConn[i, j] == 1 and j != i) for j in range(len(SymConn[i, :]))])[0][0]
+
+                        print("Correlate Src " + str(i) + " " + str(j))
+
+                        SrcDone[j] = 1
+                        SrcDone[i] = 1
+
+                        for eps in range(n_eps):
+
+                            BrainSrc[i, eps, :] = self.SignalGen(ep_len, GenFuncs[i])
+                            BrainSrc[j, eps, :] = self.SignalImi(BrainSrc[i, eps, :], ImiFuncs['Tr' + str(i) + 'Re' + str(j)])
+
+                else:
+
+                    j = np.where([(AssConn[j, i] == 1) for j in range(len(AssConn[:, i]))])[0][0]
+
+                    print("Correlate Src Ass " + str(i) + " " + str(j))
+
+                    for eps in range(n_eps):
+
+                        BrainSrc[i, eps, :] = self.SignalImi(BrainSrc[j, eps, :], ImiFuncs['Tr' + str(j) + 'Re' + str(i)])
+                        SrcDone[i] = 1
+
+        return np.array(BrainSrc)
     
-    def indSignalGen(self, ep_len, gen_func, specs):
+    def SignalGen(self, ep_len, GenFunc):
 
-        FuncGen = getattr(FunctionGenerators, gen_func)
+        FuncGen = getattr(FunctionGenerators, GenFunc['GenFunc'])
 
-        return FuncGen(ep_len, specs)
+        return FuncGen(ep_len, GenFunc['GenFuncSpecs'])
     
-    def depSignalGen(self):
+    def SignalImi(self, main_role, ImiFunc):
 
-        return None
+        FuncImi = getattr(FunctionImitators, ImiFunc['ImiFunc'])
+
+        return FuncImi(main_role, ImiFunc['ImiFuncSpecs'])
     
     def AllocateSourceLocs(self, **kwargs):
 
         properties = {
 
-            'source_locs': 'Random'
+            'SourceLocs': 'Random'
         }
 
         properties.update(kwargs)
 
-        n_src = self.source_properties['number_of_sources']
+        n_src = self.SourceProperties['Basics']['NumOfSources']
 
-        if properties['source_locs'] == 'Random':
+        if properties['SourceLocs'] == 'Random':
 
-            self.source_properties['source_locs'] = VU.GenerateRandomPointInSphere(n_src)
+            self.SourceProperties['Spatial']['SourceLocs'] = VU.GenerateRandomPointInSphere(n_src)
 
         else:
 
-            assert np.array(properties['source_locs']).shape == (n_src, 3) or np.array(properties['source_locs']).shape == (3, n_src), "Input True shape of locations matrix"
+            assert np.array(properties['SourceLocs']).shape == (n_src, 3) or np.array(properties['SourceLocs']).shape == (3, n_src), "Input True shape of locations matrix"
 
-            if np.array(properties['source_locs']).shape == (3, n_src):
+            if np.array(properties['SourceLocs']).shape == (3, n_src):
 
-                self.source_properties['source_locs'] = np.array(properties['source_locs']).T
+                self.SourceProperties['Spatial']['SourceLocs'] = np.array(properties['SourceLocs']).T
 
             else:
 
-                self.source_properties['source_locs'] = np.array(properties['source_locs'])
+                self.SourceProperties['Spatial']['SourceLocs'] = np.array(properties['SourceLocs'])
 
     def AllocateSensorLocs(self, **kwargs): # Is other than Scalp Sensors are necessary?
 
         properties = {
 
-            'sensor_locs': 'RandomOnHead'
+            'SensorLocs': 'RandomOnHead'
         }
 
         properties.update(kwargs)
 
-        n_snr = self.sensor_properties['number_of_sensors']
+        n_snr = self.SensorProperties['Basics']['NumOfSensors']
 
-        if properties['sensor_locs'] == 'RandomOnHead':
+        if properties['SensorLocs'] == 'RandomOnHead':
 
-            self.sensor_properties['sensor_locs'] = VU.GenerateRandomPointOnSphere(n_snr)
+            self.SensorProperties['Spatial']['SensorLocs'] = VU.GenerateRandomPointOnSphere(n_snr)
 
         else:
 
-            assert np.array(properties['sensor_locs']).shape == (n_snr, 3) or np.array(properties['sensor_locs']).shape == (3, n_snr), "Input True shape of locations matrix"
+            assert np.array(properties['SensorLocs']).shape == (n_snr, 3) or np.array(properties['SensorLocs']).shape == (3, n_snr), "Input True shape of locations matrix"
 
-            if np.array(properties['sensor_locs']).shape == (3, n_snr):
+            if np.array(properties['SensorLocs']).shape == (3, n_snr):
 
-                self.sensor_properties['sensor_locs'] = np.array(properties['sensor_locs']).T
+                self.SensorProperties['Spatial']['SensorLocs'] = np.array(properties['SensorLocs']).T
 
             else:
 
-                self.sensor_properties['sensor_locs'] = np.array(properties['sensor_locs'])
+                self.SensorProperties['Spatial']['SensorLocs'] = np.array(properties['SensorLocs'])
 
     def GenerateSensorSignal(self, **kwargs): # Handle Other than HG method, specially non Ps-EEG files
 
         properties = {
 
-            'volume_conduction': 'HG'
+            'VolumeConduction': 'HG'
 
         }
 
         properties.update(kwargs)
 
-        CondMat = VU.VolumeCondutionSim(self.source_properties['source_locs'], self.sensor_properties['sensor_locs'], properties['volume_conduction'])
+        CondMat = VU.VolumeCondutionSim(self.SourceProperties['Spatial']['SourceLocs'], self.SensorProperties['Spatial']['SensorLocs'], properties['VolumeConduction'])
 
         tmp_sensor_sig = [] # IT IS A REAL SHIT
 
-        for eps in range(self.source_signals.shape[1]):
+        for eps in range(self.SourceSignals.shape[1]):
 
-            tmp_sensor_sig.append(np.matmul(CondMat, self.source_signals[:, eps, :]))
+            tmp_sensor_sig.append(np.matmul(CondMat, self.SourceSignals[:, eps, :]))
 
-        self.sensor_signals = np.array(tmp_sensor_sig)
+        self.SensorSignals = np.array(tmp_sensor_sig).transpose((1, 0, 2))
+        self.CondMat = CondMat
+
+    # def SetConnections(self, ConnectionList, ConnectionTypes):
+
+    def PlotSourceSignals(self, ax = None, bias = None):
+
+        NumOfEps = self.SourceProperties['Basics']['NumOfEpisodes']
+        EpLen = self.SourceProperties['Basics']['EpisodeLength']
+        Fs = Constants.Fs['default']
+
+        if ax == None:
+
+            fig, ax = plt.subplots(1, 1)
+
+        time_p = np.linspace(0, NumOfEps * EpLen / Fs, NumOfEps * EpLen)
+
+        NumOfSrc = self.SourceProperties['Basics']['NumOfSources']
+
+        if bias == None:
+
+            bias = np.max(self.SourceSignals)
+
+        for Src in range(NumOfSrc):
+
+            ax.plot(time_p, np.ravel(self.SourceSignals[Src, :, :]) + Src * bias, label = str(Src + 1))
+
+        ax.legend()
+        ax.set_xlim([time_p[0], time_p[-1]])
+        ax.yaxis.set_visible(False)
+        plt.show(fig)
+
+        return fig, ax
+    
+    def PlotSensorSignals(self, ax = None, bias = None):
+
+        NumOfEps = self.SourceProperties['Basics']['NumOfEpisodes']
+        EpLen = self.SourceProperties['Basics']['EpisodeLength']
+        Fs = Constants.Fs['default']
+
+        if ax == None:
+
+            fig, ax = plt.subplots(1, 1)
+
+        time_p = np.linspace(0, NumOfEps * EpLen / Fs, NumOfEps * EpLen)
+
+        NumOfSnr = self.SensorProperties['Basics']['NumOfSensors']
+
+        if bias == None:
+
+            bias = np.max(self.SensorSignals)
+
+        for Src in range(NumOfSnr):
+
+            ax.plot(time_p, np.ravel(self.SensorSignals[Src, :, :]) + Src * bias, label = str(Src + 1))
+
+        ax.legend()
+        ax.set_xlim([time_p[0], time_p[-1]])
+        ax.yaxis.set_visible(False)
+        plt.show(fig)
+
+        return fig, ax

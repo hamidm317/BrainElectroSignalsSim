@@ -54,3 +54,10 @@ def ConductionStr(Pa, Pb):
     else:
 
         return CS
+    
+def AESIR(ConMat):
+
+    SymConn = ConMat * ConMat.T
+    AssConn = ConMat - SymConn
+
+    return AssConn, SymConn
