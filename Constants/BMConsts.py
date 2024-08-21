@@ -7,25 +7,58 @@ class Constants():
         'default': 500
     }
 
-    source_properties = {
+    SourceProperties = {
 
         'default': {
 
-            'episode': 1,
-            'number_of_sources': 2,
-            'episode_length': 1000,
-            'connections': np.arange(2),
-            'generating_functions': ['AWGN'],
-            'gen_func_specs': {'mean': 0, 'var': 1},
+            'Spatial':{
+
+                'SourceLocs': [],
+
+            },
+
+            'Network':{
+
+                'Connections': [[1, 0],
+                               [0, 1]],
+
+                'NodeProperties':[
+
+                    {'GenFunc': 'AWGN', 'GenFuncSpecs':{'mean': 0, 'var': 1}}
+                ],
+
+                'EdgeProperties':{
+
+                }
+            },
+
+            'Basics':{
+
+                'NumOfEpisodes': 1,
+                'NumOfSources': 2,
+                'EpisodeLength': 1000
+            }
             
         }
     }
 
-    sensor_properties = {
+    SensorProperties = {
 
         'default':{
+
+            'Basics':{
+
+                'NumOfSensors': 10,
+
+            },
+
+            'Spatial':{
+
+                'SensorLocs': []
+
+            }
             
-            'number_of_sensors': 10,
+            
 
         }
     }
