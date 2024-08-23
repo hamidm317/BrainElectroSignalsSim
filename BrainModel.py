@@ -210,8 +210,9 @@ class BrainModel():
         for Src in range(NumOfSrc):
 
             ax.plot(time_p, np.ravel(self.SourceSignals[Src, :, :]) + Src * bias, label = str(Src + 1))
-
-        ax.legend()
+            ax.text(-0.1, Src * bias, str(Src + 1))
+            
+        # ax.legend()
         ax.set_xlim([time_p[0], time_p[-1]])
         ax.yaxis.set_visible(False)
         plt.show(fig)
@@ -239,10 +240,28 @@ class BrainModel():
         for Src in range(NumOfSnr):
 
             ax.plot(time_p, np.ravel(self.SensorSignals[Src, :, :]) + Src * bias, label = str(Src + 1))
+            ax.text(-0.1, Src * bias, str(Src + 1))
 
-        ax.legend()
+        # ax.legend()
         ax.set_xlim([time_p[0], time_p[-1]])
         ax.yaxis.set_visible(False)
-        plt.show(fig)
 
         return fig, ax
+    
+    def SaveModel(self, SaveDictDir = Constants.Directories['SaveDictDir'], file_name = 'EVTH.pickle'):
+
+        BrainModelDict = {}
+
+        BrainModelDict['SourceProperties'] = self.SourceProperties
+        BrainModelDict['SensorProperties'] = self.SensorProperties
+
+        BrainModelDict['CondMat'] = self.CondMat
+
+        BrainModelDict['SourceSignals'] = self.SourceSignals
+        BrainModelDict['SensorSignals'] = self.SensorSignals
+
+        import pickle
+
+        with open(SaveDictDir + '\\' + file_name, 'wb') as f:
+        
+            pickle.dump(BrainModelDict, f, protocol=pickle.HIGHEST_PROTOCOL)
