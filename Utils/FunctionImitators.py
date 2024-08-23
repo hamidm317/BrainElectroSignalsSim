@@ -1,6 +1,10 @@
 import numpy as np
 import scipy.signal as signal
+
 from Utils import FunctionGenerators
+from Utils import Couplers
+
+from Constants.BMConsts import Constants
 
 def ASBC(main_role, specs): ## ADD NOISE BASED ON SNR!
 
@@ -9,12 +13,13 @@ def ASBC(main_role, specs): ## ADD NOISE BASED ON SNR!
 
     return imitator
 
-def Imitator(main_role, RandomnessLevel, CouplingSpecs, delay, phase_ext = 'hilbert', amp_base = 'AWGN', **kwargs):
+def Imitator(main_role, RandomnessLevel, CouplingSpecs, delay, phase_ext = 'hilbert', amp_base = 'CGN', **kwargs):
 
     options = {
 
-        'mean': 0,
-        'var': 1
+        'Color': 'Brown',
+        'var': 1,
+        'Fs': Constants.Fs['default']
     }
 
     assert RandomnessLevel >= 0 and RandomnessLevel <= 1, "Probability must be between 0 and 1"
@@ -24,51 +29,14 @@ def Imitator(main_role, RandomnessLevel, CouplingSpecs, delay, phase_ext = 'hilb
 
     UncorrTerm = GaussianUncorrelator(RandomnessLevel, len(main_role)) # maybe someone like to apply another Uncorrelating method!
 
-    if CouplingSpecs == 'A2A':
+    Coupler = getattr(Couplers, CouplingSpecs)
 
-        ImiSig = main_role * UncorrTerm
-    
-    elif CouplingSpecs == 'P2P':
+    specs = {}
 
-        BaseGen = getattr(FunctionGenerators, amp_base)
+    specs['amp_base'] = amp_base
+    specs['options'] = options
 
-        BaseSig = BaseGen(len(main_role), options)
-
-        # it is assumed that everybody wants HILBERT transform, handle it ...
-        # very soon
-
-        ImiAmp = np.abs(signal.hilbert(BaseSig))
-        ImiPha = np.angle(signal.hilbert(main_role)) * UncorrTerm
-
-        ImiSig = np.real(ImiAmp * np.exp(1j * ImiPha))
-    
-    elif CouplingSpecs == 'A2P':
-
-        BaseGen = getattr(FunctionGenerators, amp_base)
-
-        BaseSig = BaseGen(len(main_role), options)
-
-        # it is assumed that everybody wants HILBERT transform, handle it ...
-        # very soon
-
-        ImiAmp = np.abs(signal.hilbert(BaseSig))
-        ImiPha = main_role / np.max(np.abs(main_role)) * np.pi * UncorrTerm
-
-        ImiSig = np.real(ImiAmp * np.exp(1j * ImiPha))
-
-    elif CouplingSpecs == 'P2A':
-
-        BaseGen = getattr(FunctionGenerators, amp_base)
-
-        BaseSig = BaseGen(len(main_role), options)
-
-        # it is assumed that everybody wants HILBERT transform, handle it ...
-        # very soon
-
-        ImiAmp = np.angle(signal.hilbert(main_role)) * UncorrTerm
-        ImiPha = np.angle(signal.hilbert(BaseSig))
-
-        ImiSig = np.real(ImiAmp * np.exp(1j * ImiPha))
+    ImiSig = Coupler(main_role, UncorrTerm, specs)
 
     return np.roll(ImiSig, delay)
 
