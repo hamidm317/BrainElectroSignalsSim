@@ -1,4 +1,7 @@
 import numpy as np
+import scipy.stats as sps
+
+from Utils import Colorizers
 
 def AWGN(sig_length, specs):
 
@@ -48,6 +51,63 @@ def RandomlySmoothSpiking(sig_length, specs):
     else:
 
         return NF_sig
+    
+def CGN(sig_length, specs):
+
+    color = specs['Color']
+    var = specs['var']
+    Fs = specs['Fs']
+
+    Xw = AWGN(sig_length, {'mean': 0, 'var': var})
+
+    Sw = np.fft.rfft(Xw)
+    f = np.fft.rfftfreq(sig_length, 1 / Fs)
+
+    Colorizer = getattr(Colorizers, color)
+
+    Sc = Colorizer(Sw, f)
+
+    Xc = np.fft.irfft(Sc)
+
+    return sps.zscore(Xc)
+
+def Wanderer(sig_length, specs):
+
+    w_order = specs['order']
+    cVar = specs['cVar']
+
+    C = np.zeros(sig_length)
+    C[:w_order] = np.random.normal(scale = cVar, size = w_order)
+
+    for i in range(w_order, sig_length):
+
+        C[i] = np.random.normal(loc = np.mean(C[i - w_order : i]), scale = cVar)
+
+    return C
+
+def AuRe(sig_length, specs):
+
+    w_order = specs['order']
+
+    cVar = specs['cVar']
+    iVar = specs['iVar']
+
+    if 'AR_Coeff' in specs.keys():
+
+        Coeffs = specs['AR_Coeffs']
+
+    else:
+
+        Coeffs = np.random.normal(scale = cVar, size = w_order)
+
+    C = np.zeros(sig_length)
+    C[:w_order] = np.random.normal(scale = iVar, size = w_order)
+
+    for i in range(w_order, sig_length):
+
+        C[i] = np.sum(Coeffs * C[i - w_order : i])
+
+    return C
 
 def MovMean(A, k):
 
