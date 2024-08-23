@@ -24,7 +24,8 @@ class Constants():
 
                 'NodeProperties':[
 
-                    {'GenFunc': 'AWGN', 'GenFuncSpecs':{'mean': 0, 'var': 1}}
+                    # {'GenFunc': 'AWGN', 'GenFuncSpecs':{'mean': 0, 'var': 1}}
+                    {'GenFunc': 'CGN', 'GenFuncSpecs':{'Color': 'Pink', 'var': 1, 'Fs': 500}} # How to Refer it to the Fs of this class?
                 ],
 
                 'EdgeProperties':{
@@ -61,4 +62,9 @@ class Constants():
             
 
         }
+    }
+
+    Directories = {
+
+        'SaveDictDir': r'D:\AIRLab_Research\Data\SimulationData'
     }
