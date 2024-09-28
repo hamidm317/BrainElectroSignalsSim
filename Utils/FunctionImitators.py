@@ -9,11 +9,11 @@ from Constants.BMConsts import Constants
 def ASBC(main_role, specs): ## ADD NOISE BASED ON SNR!
 
 
-    imitator = Imitator(main_role, specs['Randomness'], specs['CouplingSpecs'], specs['delay'])
+    imitator = Imitator(main_role, specs)
 
     return imitator
 
-def Imitator(main_role, RandomnessLevel, CouplingSpecs, delay, phase_ext = 'hilbert', amp_base = 'CGN', **kwargs):
+def Imitator(main_role, specs, phase_ext = 'hilbert', amp_base = 'CGN', **kwargs):
 
     options = {
 
@@ -21,6 +21,10 @@ def Imitator(main_role, RandomnessLevel, CouplingSpecs, delay, phase_ext = 'hilb
         'var': 1,
         'Fs': Constants.Fs['default']
     }
+
+    RandomnessLevel = specs['Randomness']
+    CouplingSpecs = specs['CouplingSpecs']
+    delay = specs['delay']
 
     assert RandomnessLevel >= 0 and RandomnessLevel <= 1, "Probability must be between 0 and 1"
     assert type(delay) == int, "Insert lag as an integer number"
@@ -30,8 +34,6 @@ def Imitator(main_role, RandomnessLevel, CouplingSpecs, delay, phase_ext = 'hilb
     UncorrTerm = GaussianUncorrelator(RandomnessLevel, len(main_role)) # maybe someone like to apply another Uncorrelating method!
 
     Coupler = getattr(Couplers, CouplingSpecs)
-
-    specs = {}
 
     specs['amp_base'] = amp_base
     specs['options'] = options
